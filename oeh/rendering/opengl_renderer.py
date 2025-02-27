@@ -166,129 +166,27 @@ class OpenGLRenderer:
         glClearColor(0.0, 0.0, 0.1, 1.0)  # Dark blue background
         logger.info("Renderer initialized successfully")
 
+    def _load_shader_source(self, filename: str) -> str:
+        """
+        Loads and returns the shader source code from a file in the 'shaders' directory.
+        """
+        shader_dir = os.path.join(os.path.dirname(__file__), "shaders")
+        filepath = os.path.join(shader_dir, filename)
+        try:
+            with open(filepath, "r") as f:
+                source = f.read()
+            return source
+        except Exception as e:
+            logger.error(f"Failed to load shader file {filepath}: {e}")
+            raise
+
     def _setup_shaders(self):
-        """Compiles and links the vertex and fragment shaders for rendering and post-processing."""
-        # Shader for displaying the texture on screen
-        vertex_shader_source = """
-        #version 330 core
-        layout (location = 0) in vec2 aPos;
-        layout (location = 1) in vec2 aTexCoord;
-
-        out vec2 TexCoord;
-
-        void main() {
-            gl_Position = vec4(aPos, 0.0, 1.0);
-            TexCoord = aTexCoord;
-        }
-        """
+        """Loads shader source from files, compiles them, and links the shader program."""
+        # Load shader sources from external files
+        vertex_shader_source = self._load_shader_source("vertex_shader.glsl")
+        fragment_shader_source = self._load_shader_source("fragment_shader.glsl")
         
-        # Post-processing fragment shader with advanced effects
-        fragment_shader_source = """
-        #version 330 core
-        out vec4 FragColor;
-        in vec2 TexCoord;
-
-        uniform sampler2D screenTexture;
-        
-        // Post-processing parameters
-        uniform float exposure;
-        uniform float contrast;
-        uniform float saturation;
-        uniform float gamma;
-        uniform float bloomStrength;
-        uniform bool enableVignette;
-
-        vec3 adjustExposure(vec3 color, float exposure) {
-            // Exposure tone mapping - simulates camera exposure
-            return vec3(1.0) - exp(-color * exposure);
-        }
-
-        vec3 adjustContrast(vec3 color, float contrast) {
-            // Improved contrast adjustment with proper luminance preservation
-            const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-            float luminance = dot(color, luminanceWeights);
-            return mix(vec3(luminance), color, contrast);
-        }
-
-        vec3 adjustSaturation(vec3 color, float saturation) {
-            // Saturation adjustment with proper luminance preservation
-            const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-            float luminance = dot(color, luminanceWeights);
-            return mix(vec3(luminance), color, saturation);
-        }
-
-        vec3 adjustGamma(vec3 color, float gamma) {
-            // Gamma correction for proper color space transformation
-            return pow(max(color, vec3(0.0001)), vec3(1.0 / gamma));
-        }
-
-        vec3 applyVignette(vec3 color, vec2 texCoord) {
-            // Improved smooth vignette effect
-            vec2 center = vec2(0.5);
-            float dist = length(texCoord - center);
-            float radius = 1.3;  // Adjust for vignette size
-            float softness = 0.8; // Adjust for vignette softness
-            float vignette = smoothstep(radius, radius - softness, dist);
-            return color * vignette;
-        }
-        
-        vec3 applyBloom(vec3 color, vec2 texCoord, float strength) {
-            // Advanced bloom effect using multi-pass sampling
-            const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-            float brightness = dot(color, luminanceWeights);
-            
-            // Only apply bloom to bright areas
-            if (brightness > 0.7) {
-                vec2 texSize = textureSize(screenTexture, 0);
-                vec2 texelSize = 1.0 / texSize;
-                
-                // Multi-sample blur
-                vec3 bloomColor = vec3(0.0);
-                float totalWeight = 0.0;
-                
-                // Two-pass Gaussian approximation
-                for (int x = -3; x <= 3; x++) {
-                    for (int y = -3; y <= 3; y++) {
-                        // Gaussian weight
-                        float weight = exp(-(x*x + y*y) / 8.0);
-                        vec2 offset = vec2(float(x), float(y)) * texelSize * 2.0;
-                        bloomColor += texture(screenTexture, texCoord + offset).rgb * weight;
-                        totalWeight += weight;
-                    }
-                }
-                
-                bloomColor /= totalWeight;
-                
-                // Adaptive bloom factor based on brightness
-                float bloomFactor = smoothstep(0.7, 1.0, brightness) * strength;
-                
-                // Add bloom to original color
-                return color + bloomColor * bloomFactor;
-            }
-            
-            return color;
-        }
-
-        void main() {
-            // Sample the texture
-            vec3 color = texture(screenTexture, TexCoord).rgb;
-            
-            // Apply post-processing pipeline
-            color = applyBloom(color, TexCoord, bloomStrength);
-            color = adjustExposure(color, exposure);
-            color = adjustContrast(color, contrast);
-            color = adjustSaturation(color, saturation);
-            if (enableVignette) {
-                color = applyVignette(color, TexCoord);
-            }
-            color = adjustGamma(color, gamma);
-            
-            // Final color output
-            FragColor = vec4(color, 1.0);
-        }
-        """
-
-        # Compile shaders
+        # Compile shaders using the loaded source code
         vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER)
         fragment_shader = compile_shader(fragment_shader_source, GL_FRAGMENT_SHADER)
 
@@ -314,6 +212,7 @@ class OpenGLRenderer:
         glUniform1i(glGetUniformLocation(self.shader_program, "screenTexture"), 0)
         self._update_post_processing_uniforms()
 
+
     def _update_post_processing_uniforms(self):
         """Updates all post-processing uniform values in the shader."""
         glUseProgram(self.shader_program)
@@ -326,15 +225,14 @@ class OpenGLRenderer:
                    GL_TRUE if self.pp_vignette else GL_FALSE)
 
     def _setup_framebuffer(self):
-        """Creates a framebuffer for off-screen rendering with multisampling support."""
-        # Create framebuffer
+    # Create framebuffer
         self.framebuffer = glGenFramebuffers(1)
         glBindFramebuffer(GL_FRAMEBUFFER, self.framebuffer)
         
-        # Create texture attachment
+        # Create texture attachment with alpha channel
         self.render_texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.render_texture)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, self.width, self.height, 0, GL_RGB, GL_FLOAT, None)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, self.width, self.height, 0, GL_RGBA, GL_FLOAT, None)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
@@ -399,7 +297,6 @@ class OpenGLRenderer:
         glBindVertexArray(0)
 
     def _setup_texture(self):
-        """Creates a texture for rendering the simulation results."""
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texture)
         
@@ -409,7 +306,6 @@ class OpenGLRenderer:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         
-        # Allocate storage for high dynamic range floating point texture
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, self.width, self.height, 0, GL_RGB, GL_FLOAT, None)
 
     def key_callback(self, window, key, scancode, action, mods):
@@ -614,27 +510,21 @@ class OpenGLRenderer:
             # Use the cached image when paused
             image = self.last_image
         
-        # Upload the image data to the texture
+        # Upload the image data to the texture with correct format
         glBindTexture(GL_TEXTURE_2D, self.texture)
+        
+        # If run_simulation returns RGB data:
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, self.width, self.height, GL_RGB, GL_FLOAT, image)
         
-        # First pass: Render to framebuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, self.framebuffer)
+        # Clear the screen with FULLY OPAQUE background
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glClearColor(0.0, 0.0, 0.1, 1.0)  # Dark blue background with alpha=1.0
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         
-        # Render the texture directly to the framebuffer
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, self.texture)
-        glBindVertexArray(self.VAO)
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
-        
-        # Second pass: Render framebuffer to screen with post-processing
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
-        glClear(GL_COLOR_BUFFER_BIT)
-        
+        # Draw the texture to the screen using post-processing
         glUseProgram(self.shader_program)
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, self.render_texture)
+        glBindTexture(GL_TEXTURE_2D, self.texture)
         glBindVertexArray(self.VAO)
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, None)
         
@@ -645,9 +535,6 @@ class OpenGLRenderer:
         if self.show_help:
             self._draw_help()
             
-        # Swap buffers
-        glfw.swap_buffers(self.window)
-        
         # Update performance counters
         self.frame_count += 1
         current_time = time.time()

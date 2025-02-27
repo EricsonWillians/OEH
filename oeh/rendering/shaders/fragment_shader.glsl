@@ -4,100 +4,130 @@ in vec2 TexCoords;
 
 uniform sampler2D screenTexture;
 
-// Post-processing parameters
-uniform float exposure;       // Controls overall brightness
-uniform float contrast;       // Enhances color separation
-uniform float saturation;     // Color vibrance
-uniform float gamma;          // Gamma correction value
-uniform float bloomStrength;  // Intensity of glow around bright areas
-uniform bool enableVignette;  // Darkens edges for dramatic effect
+// Post‑processing parameters
+uniform float exposure;       // Overall brightness multiplier
+uniform float contrast;       // Contrast adjustment factor
+uniform float saturation;     // Saturation adjustment factor
+uniform float gamma;          // Gamma correction (final power-law)
+uniform float bloomStrength;  // Bloom intensity
+uniform bool  enableVignette; // Toggle vignette effect
+uniform float boost;          // Extra boost for very low radiance
 
-// Physics-based tone mapping inspired by Pariev et al. (2003)
-vec3 adjustExposure(vec3 color, float exposure) {
-    // HDR tone mapping with physical model - simulates camera exposure
-    return vec3(1.0) - exp(-color * exposure);
-}
-
-vec3 adjustContrast(vec3 color, float contrast) {
-    // Improved contrast adjustment with proper luminance preservation
-    const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-    float luminance = dot(color, luminanceWeights);
-    return mix(vec3(luminance), color, contrast);
-}
-
-vec3 adjustSaturation(vec3 color, float saturation) {
-    // Saturation adjustment with proper luminance preservation
-    const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-    float luminance = dot(color, luminanceWeights);
-    return mix(vec3(luminance), color, saturation);
-}
-
-vec3 adjustGamma(vec3 color, float gamma) {
-    // Gamma correction for proper color space transformation
-    return pow(max(color, vec3(0.0001)), vec3(1.0 / gamma));
-}
-
-vec3 applyVignette(vec3 color, vec2 texCoord) {
-    // Improved smooth vignette effect
-    vec2 center = vec2(0.5);
-    float dist = length(texCoord - center);
-    float radius = 1.3;  // Adjust for vignette size
-    float softness = 0.8; // Adjust for vignette softness
-    float vignette = smoothstep(radius, radius - softness, dist);
-    return color * vignette;
-}
-
-vec3 applyBloom(vec3 color, vec2 texCoord, float strength) {
-    // Advanced bloom effect using multi-pass sampling
-    const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
-    float brightness = dot(color, luminanceWeights);
+// -----------------------------------------------------------------------------
+// FILMIC TONE MAPPING (ACES‑inspired)
+// -----------------------------------------------------------------------------
+vec3 filmicToneMapping(vec3 x)
+{
+    // Lift shadows a bit so nothing stays pitch black.
+    x = max(vec3(0.0), x - 0.004);
     
-    // Only apply bloom to bright areas
+    // ACES tone mapping constants (tweak as needed)
+    float A = 2.51;
+    float B = 0.03;
+    float C = 2.43;
+    float D = 0.59;
+    float E = 0.14;
+    
+    return clamp((x * (A * x + B)) / (x * (C * x + D) + E), 0.0, 1.0);
+}
+
+// -----------------------------------------------------------------------------
+// BLOOM: Gaussian blur on bright areas
+// -----------------------------------------------------------------------------
+vec3 applyBloom(vec3 color, vec2 uv, float strength)
+{
+    const vec3 lumW = vec3(0.2126, 0.7152, 0.0722);
+    float brightness = dot(color, lumW);
     if (brightness > 0.7) {
         vec2 texSize = textureSize(screenTexture, 0);
-        vec2 texelSize = 1.0 / texSize;
-        
-        // Multi-sample blur
-        vec3 bloomColor = vec3(0.0);
-        float totalWeight = 0.0;
-        
-        // Two-pass Gaussian approximation
+        vec2 texel = 1.0 / texSize;
+        vec3 sum = vec3(0.0);
+        float total = 0.0;
         for (int x = -3; x <= 3; x++) {
             for (int y = -3; y <= 3; y++) {
-                // Gaussian weight
-                float weight = exp(-(x*x + y*y) / 8.0);
-                vec2 offset = vec2(float(x), float(y)) * texelSize * 2.0;
-                bloomColor += texture(screenTexture, texCoord + offset).rgb * weight;
-                totalWeight += weight;
+                float weight = exp(-float(x*x + y*y) / 8.0);
+                vec2 offset = vec2(x, y) * texel * 2.0;
+                sum += texture(screenTexture, uv + offset).rgb * weight;
+                total += weight;
             }
         }
-        
-        bloomColor /= totalWeight;
-        
-        // Adaptive bloom factor based on brightness
+        sum /= total;
         float bloomFactor = smoothstep(0.7, 1.0, brightness) * strength;
-        
-        // Add bloom to original color
-        return color + bloomColor * bloomFactor;
+        return color + sum * bloomFactor;
     }
-    
     return color;
 }
 
-void main() {
-    // Sample the texture
+// -----------------------------------------------------------------------------
+// CONTRAST ADJUSTMENT
+// -----------------------------------------------------------------------------
+vec3 adjustContrast(vec3 color, float contrast)
+{
+    const vec3 lumW = vec3(0.2126, 0.7152, 0.0722);
+    float lum = dot(color, lumW);
+    return mix(vec3(lum), color, contrast);
+}
+
+// -----------------------------------------------------------------------------
+// SATURATION ADJUSTMENT
+// -----------------------------------------------------------------------------
+vec3 adjustSaturation(vec3 color, float saturation)
+{
+    const vec3 lumW = vec3(0.2126, 0.7152, 0.0722);
+    float lum = dot(color, lumW);
+    return mix(vec3(lum), color, saturation);
+}
+
+// -----------------------------------------------------------------------------
+// VIGNETTE EFFECT
+// -----------------------------------------------------------------------------
+vec3 applyVignette(vec3 color, vec2 uv)
+{
+    vec2 center = vec2(0.5);
+    float dist = length(uv - center);
+    float radius = 1.3;
+    float softness = 0.8;
+    float vig = smoothstep(radius, radius - softness, dist);
+    return color * vig;
+}
+
+// -----------------------------------------------------------------------------
+// MAIN
+// -----------------------------------------------------------------------------
+void main()
+{
+    // Sample the texture from the raytracer.
     vec3 color = texture(screenTexture, TexCoords).rgb;
     
-    // Apply post-processing pipeline
+    // If the sampled color is extremely dark, boost it.
+    float maxChannel = max(color.r, max(color.g, color.b));
+    if(maxChannel < 0.01) {
+        color *= boost;
+    }
+    
+    // Apply exposure scaling.
+    color *= exposure;
+    
+    // Apply bloom effect.
     color = applyBloom(color, TexCoords, bloomStrength);
-    color = adjustExposure(color, exposure);
+    
+    // Adjust contrast and saturation.
     color = adjustContrast(color, contrast);
     color = adjustSaturation(color, saturation);
-    if (enableVignette) {
+    
+    // Apply filmic tone mapping.
+    color = filmicToneMapping(color);
+    
+    // Optional vignette effect.
+    if(enableVignette) {
         color = applyVignette(color, TexCoords);
     }
-    color = adjustGamma(color, gamma);
     
-    // Final color output
+    // Final gamma correction.
+    color = pow(max(color, vec3(0.0)), vec3(1.0 / gamma));
+    
+    // Clamp final color.
+    color = clamp(color, 0.0, 1.0);
+    
     FragColor = vec4(color, 1.0);
 }

@@ -353,8 +353,8 @@ def raytrace_kernel(
         dir_y /= dir_len
 
     # Trace ray with optimized parameters for visual quality
-    dt = 0.05 * (r_sch / C)  # Time step (smaller for better accuracy)
-    max_steps = 12000        # More steps for better integration
+    dt = 5.0e-4 * (r_sch / C)
+    max_steps = 2000        # More steps for better integration
     escape_radius = 100.0 * r_sch  # Larger escape radius for better background
     
     # Output color array

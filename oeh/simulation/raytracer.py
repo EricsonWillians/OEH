@@ -458,7 +458,7 @@ def raytrace_kernel(
         
         # Adaptive scaling based on approximate temperature
         # This helps visualize the distinctive temperature profile differences
-        scale_factor = 5.0e-9 * (2.0e5 / T_approx)
+        scale_factor = 5.0e-3 * (2.0e5 / T_approx)
         
         # Apply Doppler and gravitational redshift effects (simplified)
         # Calculate approximate Keplerian orbital velocity at r_hit
