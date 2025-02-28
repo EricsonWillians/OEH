@@ -411,7 +411,7 @@ def raytrace_kernel(
 
     # Trace the ray - time step carefully chosen for stability
     dt = 1.0e-4 * (r_sch / C)  # Smaller dt for better accuracy near horizon
-    max_steps = 12000  # More steps for better integration accuracy
+    max_steps = 10  # More steps for better integration accuracy
 
     r_hit = trace_ray_equatorial(
         camera_x, camera_y,
@@ -540,7 +540,7 @@ def run_simulation(
     d_image = cuda.to_device(image)
 
     # Grid setup
-    threadsperblock = (16, 16)
+    threadsperblock = (32, 8)
     blockspergrid_x = (WINDOW_WIDTH + threadsperblock[0] - 1) // threadsperblock[0]
     blockspergrid_y = (WINDOW_HEIGHT + threadsperblock[1] - 1) // threadsperblock[1]
     blocks = (blockspergrid_x, blockspergrid_y)
@@ -555,9 +555,9 @@ def run_simulation(
         WINDOW_HEIGHT,
         custom_camera_position[0],
         custom_camera_position[1],
-        custom_black_hole_mass,  # in Msun
+        custom_black_hole_mass,
         custom_fov,
-        b_field_exponent,        # Controls magnetic field structure
+        b_field_exponent,
         integrator_choice
     )
     cuda.synchronize()

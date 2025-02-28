@@ -48,9 +48,9 @@ def enhanced_trace_ray_device(
     # Advanced rendering parameters
     DOPPLER_BOOST = 2.5
     LENSING_AMPLIFICATION = 1.8
-    DISK_COLOR_INNER = (1.0, 0.85, 0.5)    # Yellow-white for hottest regions
-    DISK_COLOR_MIDDLE = (1.0, 0.6, 0.2)    # Orange for middle temperature
-    DISK_COLOR_OUTER = (0.8, 0.2, 0.1)     # Red for cooler regions
+    DISK_COLOR_INNER = (1.0, 0.9, 0.7)    # Brighter inner disk
+    DISK_COLOR_MIDDLE = (1.0, 0.7, 0.3)   # More luminous orange
+    DISK_COLOR_OUTER = (0.9, 0.3, 0.1)     # Red for cooler regions
     
     # Ray tracing state variables
     min_distance = 1e10
@@ -178,8 +178,16 @@ def enhanced_trace_ray_device(
                 # Add inner disk hot spot effects
                 if disk_pos < 0.15:
                     hot_spot = (0.15 - disk_pos) / 0.15
-                    base_red = min(1.0, base_red + 0.5 * hot_spot)
-                    base_green = min(1.0, base_green + 0.3 * hot_spot)
+                    base_red = min(1.0, base_red + 0.7 * hot_spot)    # Increase from 0.5 to 0.7
+                    base_green = min(1.0, base_green + 0.5 * hot_spot) # Increase from 0.3 to 0.5
+                    base_blue = min(1.0, base_blue + 0.3 * hot_spot)  # Add some blue for whiteness
+                
+                # an intensely bright inner edge to maximize contrast with black hole
+                if abs(r - event_horizon * 1.05) < 0.1 * event_horizon:
+                    edge_factor = 1.0 - abs(r - event_horizon * 1.05) / (0.1 * event_horizon)
+                    base_red = min(1.0, base_red + edge_factor * 0.7)
+                    base_green = min(1.0, base_green + edge_factor * 0.7)
+                    base_blue = min(1.0, base_blue + edge_factor * 0.9)  # More blue for white-hot effect
                 
                 # Add magnetic reconnection flare effects (random bright spots)
                 flare_factor = 0.0
@@ -354,7 +362,7 @@ def raytrace_kernel(
 
     # Trace ray with optimized parameters for visual quality
     dt = 5.0e-4 * (r_sch / C)
-    max_steps = 2000        # More steps for better integration
+    max_steps = 12000        # More steps for better integration
     escape_radius = 100.0 * r_sch  # Larger escape radius for better background
     
     # Output color array

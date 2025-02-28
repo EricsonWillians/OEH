@@ -212,6 +212,125 @@ class OpenGLRenderer:
         glUniform1i(glGetUniformLocation(self.shader_program, "screenTexture"), 0)
         self._update_post_processing_uniforms()
 
+    def key_callback(self, window, key, scancode, action, mods):
+        """Handles keyboard input."""
+        # Rate limiting for smoother adjustments
+        current_time = time.time()
+        if key in self.last_key_time and current_time - self.last_key_time[key] < 0.1:
+            return
+        self.last_key_time[key] = current_time
+        
+        if action == glfw.PRESS or action == glfw.REPEAT:
+            # Application control
+            if key == glfw.KEY_ESCAPE:
+                glfw.set_window_should_close(window, True)
+            elif key == glfw.KEY_SPACE:
+                self.paused = not self.paused
+                logger.info(f"Simulation {'paused' if self.paused else 'resumed'}")
+            elif key == glfw.KEY_H:
+                self.show_help = not self.show_help
+            elif key == glfw.KEY_I:
+                self.show_info = not self.show_info
+            elif key == glfw.KEY_R:
+                self.auto_rotate = not self.auto_rotate
+                logger.info(f"Auto-rotation {'enabled' if self.auto_rotate else 'disabled'}")
+            
+            # Camera movement
+            elif key == glfw.KEY_W:
+                self.camera_position = Vector2D(
+                    self.camera_position[0],
+                    self.camera_position[1] + 0.5
+                )
+            elif key == glfw.KEY_S:
+                self.camera_position = Vector2D(
+                    self.camera_position[0],
+                    self.camera_position[1] - 0.5
+                )
+            elif key == glfw.KEY_A:
+                self.camera_position = Vector2D(
+                    self.camera_position[0] - 0.5,
+                    self.camera_position[1]
+                )
+            elif key == glfw.KEY_D:
+                self.camera_position = Vector2D(
+                    self.camera_position[0] + 0.5,
+                    self.camera_position[1]
+                )
+            
+            # Black hole parameters
+            elif key == glfw.KEY_UP:
+                self.black_hole_mass += 0.5
+                logger.info(f"Black hole mass: {self.black_hole_mass} Msun")
+            elif key == glfw.KEY_DOWN:
+                self.black_hole_mass = max(1.0, self.black_hole_mass - 0.5)
+                logger.info(f"Black hole mass: {self.black_hole_mass} Msun")
+            
+            # Field of view
+            elif key == glfw.KEY_LEFT:
+                self.fov = max(0.1, self.fov - 0.05)
+                logger.info(f"FOV: {self.fov:.2f} radians")
+            elif key == glfw.KEY_RIGHT:
+                self.fov += 0.05
+                logger.info(f"FOV: {self.fov:.2f} radians")
+            
+            # Magnetic field exponent
+            elif key == glfw.KEY_B:
+                self.b_field_exponent = max(0.75, self.b_field_exponent - 0.05)
+                logger.info(f"B-field exponent: {self.b_field_exponent:.2f}")
+            elif key == glfw.KEY_N:
+                self.b_field_exponent = min(1.5, self.b_field_exponent + 0.05)
+                logger.info(f"B-field exponent: {self.b_field_exponent:.2f}")
+            
+            # Integrator selection
+            elif key == glfw.KEY_1:
+                self.integrator_choice = 0
+                logger.info("Integrator: Euler")
+            elif key == glfw.KEY_2:
+                self.integrator_choice = 1
+                logger.info("Integrator: RK4")
+            elif key == glfw.KEY_3:
+                self.integrator_choice = 2
+                logger.info("Integrator: Velocity Verlet")
+            
+            # Post-processing adjustments
+            elif key == glfw.KEY_E:
+                self.pp_exposure = max(0.1, self.pp_exposure - 0.1)
+                self._update_post_processing_uniforms()
+                logger.info(f"Exposure: {self.pp_exposure:.1f}")
+            elif key == glfw.KEY_Q:
+                self.pp_exposure += 0.1
+                self._update_post_processing_uniforms()
+                logger.info(f"Exposure: {self.pp_exposure:.1f}")
+            elif key == glfw.KEY_C:
+                self.pp_contrast = max(0.5, self.pp_contrast - 0.1)
+                self._update_post_processing_uniforms()
+                logger.info(f"Contrast: {self.pp_contrast:.1f}")
+            elif key == glfw.KEY_V:
+                self.pp_contrast += 0.1
+                self._update_post_processing_uniforms()
+                logger.info(f"Contrast: {self.pp_contrast:.1f}")
+            elif key == glfw.KEY_G:
+                self.pp_gamma = max(0.5, self.pp_gamma - 0.1)
+                self._update_post_processing_uniforms()
+                logger.info(f"Gamma: {self.pp_gamma:.1f}")
+            elif key == glfw.KEY_T:
+                self.pp_gamma += 0.1
+                self._update_post_processing_uniforms()
+                logger.info(f"Gamma: {self.pp_gamma:.1f}")
+            elif key == glfw.KEY_F:
+                self.pp_vignette = not self.pp_vignette
+                self._update_post_processing_uniforms()
+                logger.info(f"Vignette: {'On' if self.pp_vignette else 'Off'}")
+            
+            # Screenshots
+            elif key == glfw.KEY_P:
+                self.take_screenshot()
+            
+            # Reset all parameters to defaults
+            elif key == glfw.KEY_0:
+                self._reset_parameters()
+                logger.info("Parameters reset to defaults")
+
 
     def _update_post_processing_uniforms(self):
         """Updates all post-processing uniform values in the shader."""
@@ -222,7 +341,9 @@ class OpenGLRenderer:
         glUniform1f(glGetUniformLocation(self.shader_program, "gamma"), self.pp_gamma)
         glUniform1f(glGetUniformLocation(self.shader_program, "bloomStrength"), self.pp_bloom)
         glUniform1i(glGetUniformLocation(self.shader_program, "enableVignette"), 
-                   GL_TRUE if self.pp_vignette else GL_FALSE)
+                GL_TRUE if self.pp_vignette else GL_FALSE)
+        # Add time uniform for animation effects
+        glUniform1f(glGetUniformLocation(self.shader_program, "time"), time.time())
 
     def _setup_framebuffer(self):
     # Create framebuffer
@@ -518,11 +639,13 @@ class OpenGLRenderer:
         
         # Clear the screen with FULLY OPAQUE background
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
-        glClearColor(0.0, 0.0, 0.1, 1.0)  # Dark blue background with alpha=1.0
+        glClearColor(0.0, 0.0, 0.0, 1.0)  # Black background with alpha=1.0
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         
         # Draw the texture to the screen using post-processing
         glUseProgram(self.shader_program)
+        # Update time uniform for animation effects
+        glUniform1f(glGetUniformLocation(self.shader_program, "time"), time.time())
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self.texture)
         glBindVertexArray(self.VAO)
