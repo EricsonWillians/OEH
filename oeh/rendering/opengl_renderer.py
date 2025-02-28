@@ -18,7 +18,6 @@ from oeh.config import (
     FIELD_OF_VIEW
 )
 from oeh.simulation.raytracer import run_simulation, get_current_fps
-from oeh.custom_types import Vector2D
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -212,6 +211,8 @@ class OpenGLRenderer:
         glUniform1i(glGetUniformLocation(self.shader_program, "screenTexture"), 0)
         self._update_post_processing_uniforms()
 
+    # In the file oeh/rendering/opengl_renderer.py, modify the key_callback method:
+
     def key_callback(self, window, key, scancode, action, mods):
         """Handles keyboard input."""
         # Rate limiting for smoother adjustments
@@ -237,22 +238,22 @@ class OpenGLRenderer:
             
             # Camera movement
             elif key == glfw.KEY_W:
-                self.camera_position = Vector2D(
+                self.camera_position = (
                     self.camera_position[0],
                     self.camera_position[1] + 0.5
                 )
             elif key == glfw.KEY_S:
-                self.camera_position = Vector2D(
+                self.camera_position = (
                     self.camera_position[0],
                     self.camera_position[1] - 0.5
                 )
             elif key == glfw.KEY_A:
-                self.camera_position = Vector2D(
+                self.camera_position = (
                     self.camera_position[0] - 0.5,
                     self.camera_position[1]
                 )
             elif key == glfw.KEY_D:
-                self.camera_position = Vector2D(
+                self.camera_position = (
                     self.camera_position[0] + 0.5,
                     self.camera_position[1]
                 )
@@ -330,8 +331,7 @@ class OpenGLRenderer:
             elif key == glfw.KEY_0:
                 self._reset_parameters()
                 logger.info("Parameters reset to defaults")
-
-
+            
     def _update_post_processing_uniforms(self):
         """Updates all post-processing uniform values in the shader."""
         glUseProgram(self.shader_program)
@@ -429,125 +429,6 @@ class OpenGLRenderer:
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, self.width, self.height, 0, GL_RGB, GL_FLOAT, None)
 
-    def key_callback(self, window, key, scancode, action, mods):
-        """Handles keyboard input."""
-        # Rate limiting for smoother adjustments
-        current_time = time.time()
-        if key in self.last_key_time and current_time - self.last_key_time[key] < 0.1:
-            return
-        self.last_key_time[key] = current_time
-        
-        if action == glfw.PRESS or action == glfw.REPEAT:
-            # Application control
-            if key == glfw.KEY_ESCAPE:
-                glfw.set_window_should_close(window, True)
-            elif key == glfw.KEY_SPACE:
-                self.paused = not self.paused
-                logger.info(f"Simulation {'paused' if self.paused else 'resumed'}")
-            elif key == glfw.KEY_H:
-                self.show_help = not self.show_help
-            elif key == glfw.KEY_I:
-                self.show_info = not self.show_info
-            elif key == glfw.KEY_R:
-                self.auto_rotate = not self.auto_rotate
-                logger.info(f"Auto-rotation {'enabled' if self.auto_rotate else 'disabled'}")
-            
-            # Camera movement
-            elif key == glfw.KEY_W:
-                self.camera_position = Vector2D(
-                    self.camera_position[0],
-                    self.camera_position[1] + 0.5
-                )
-            elif key == glfw.KEY_S:
-                self.camera_position = Vector2D(
-                    self.camera_position[0],
-                    self.camera_position[1] - 0.5
-                )
-            elif key == glfw.KEY_A:
-                self.camera_position = Vector2D(
-                    self.camera_position[0] - 0.5,
-                    self.camera_position[1]
-                )
-            elif key == glfw.KEY_D:
-                self.camera_position = Vector2D(
-                    self.camera_position[0] + 0.5,
-                    self.camera_position[1]
-                )
-            
-            # Black hole parameters
-            elif key == glfw.KEY_UP:
-                self.black_hole_mass += 0.5
-                logger.info(f"Black hole mass: {self.black_hole_mass} Msun")
-            elif key == glfw.KEY_DOWN:
-                self.black_hole_mass = max(1.0, self.black_hole_mass - 0.5)
-                logger.info(f"Black hole mass: {self.black_hole_mass} Msun")
-            
-            # Field of view
-            elif key == glfw.KEY_LEFT:
-                self.fov = max(0.1, self.fov - 0.05)
-                logger.info(f"FOV: {self.fov:.2f} radians")
-            elif key == glfw.KEY_RIGHT:
-                self.fov += 0.05
-                logger.info(f"FOV: {self.fov:.2f} radians")
-            
-            # Magnetic field exponent
-            elif key == glfw.KEY_B:
-                self.b_field_exponent = max(0.75, self.b_field_exponent - 0.05)
-                logger.info(f"B-field exponent: {self.b_field_exponent:.2f}")
-            elif key == glfw.KEY_N:
-                self.b_field_exponent = min(1.5, self.b_field_exponent + 0.05)
-                logger.info(f"B-field exponent: {self.b_field_exponent:.2f}")
-            
-            # Integrator selection
-            elif key == glfw.KEY_1:
-                self.integrator_choice = 0
-                logger.info("Integrator: Euler")
-            elif key == glfw.KEY_2:
-                self.integrator_choice = 1
-                logger.info("Integrator: RK4")
-            elif key == glfw.KEY_3:
-                self.integrator_choice = 2
-                logger.info("Integrator: Velocity Verlet")
-            
-            # Post-processing adjustments
-            elif key == glfw.KEY_E:
-                self.pp_exposure = max(0.1, self.pp_exposure - 0.1)
-                self._update_post_processing_uniforms()
-                logger.info(f"Exposure: {self.pp_exposure:.1f}")
-            elif key == glfw.KEY_Q:
-                self.pp_exposure += 0.1
-                self._update_post_processing_uniforms()
-                logger.info(f"Exposure: {self.pp_exposure:.1f}")
-            elif key == glfw.KEY_C:
-                self.pp_contrast = max(0.5, self.pp_contrast - 0.1)
-                self._update_post_processing_uniforms()
-                logger.info(f"Contrast: {self.pp_contrast:.1f}")
-            elif key == glfw.KEY_V:
-                self.pp_contrast += 0.1
-                self._update_post_processing_uniforms()
-                logger.info(f"Contrast: {self.pp_contrast:.1f}")
-            elif key == glfw.KEY_G:
-                self.pp_gamma = max(0.5, self.pp_gamma - 0.1)
-                self._update_post_processing_uniforms()
-                logger.info(f"Gamma: {self.pp_gamma:.1f}")
-            elif key == glfw.KEY_T:
-                self.pp_gamma += 0.1
-                self._update_post_processing_uniforms()
-                logger.info(f"Gamma: {self.pp_gamma:.1f}")
-            elif key == glfw.KEY_F:
-                self.pp_vignette = not self.pp_vignette
-                self._update_post_processing_uniforms()
-                logger.info(f"Vignette: {'On' if self.pp_vignette else 'Off'}")
-            
-            # Screenshots
-            elif key == glfw.KEY_P:
-                self.take_screenshot()
-            
-            # Reset all parameters to defaults
-            elif key == glfw.KEY_0:
-                self._reset_parameters()
-                logger.info("Parameters reset to defaults")
-
     def mouse_button_callback(self, window, button, action, mods):
         """Handles mouse button input."""
         if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
@@ -577,7 +458,7 @@ class OpenGLRenderer:
     def _reset_parameters(self):
         """Resets all parameters to their default values."""
         # Reset simulation parameters
-        self.camera_position = Vector2D(*CAMERA_POSITION)
+        self.camera_position = CAMERA_POSITION
         self.black_hole_mass = BLACK_HOLE_MASS
         self.fov = FIELD_OF_VIEW
         self.b_field_exponent = 1.25
@@ -602,7 +483,7 @@ class OpenGLRenderer:
             
             # Calculate new camera position in a circular orbit
             radius = np.sqrt(self.camera_position[0]**2 + self.camera_position[1]**2)
-            self.camera_position = Vector2D(
+            self.camera_position = (
                 radius * np.cos(self.rotation_angle),
                 radius * np.sin(self.rotation_angle)
             )
