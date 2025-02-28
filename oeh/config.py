@@ -20,8 +20,8 @@ ESCAPE_RADIUS: Final[float] = 100.0  # Capture extended details in the backgroun
 # === Rendering Parameters ===
 
 # Window settings - increased resolution for better visual fidelity
-WINDOW_WIDTH: Final[int] = 640
-WINDOW_HEIGHT: Final[int] = 360
+WINDOW_WIDTH: Final[int] = 1024
+WINDOW_HEIGHT: Final[int] = 768
 WINDOW_TITLE: Final[str] = "Open Events in the Horizon"
 
 # OpenGL texture settings

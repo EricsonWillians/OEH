@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Open Events in the Horizon: A high-performance black hole simulation using OpenGL, NumPy, Numba, and CUDA."
 authors = ["Ericson Willians <ericsonwillians@protonmail.com>"]
 license = "GNU"
-homepage = "https://github.com/yourusername/oeh"
-repository = "https://github.com/yourusername/oeh"
+homepage = "https://github.com/ericsonwillians/oeh"
+repository = "https://github.com/ericsonwillians/oeh"
 requires-python = "==3.12"
 readme = "README.md"
 dependencies = [
