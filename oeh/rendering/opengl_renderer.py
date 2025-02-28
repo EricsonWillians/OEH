@@ -220,7 +220,7 @@ class OpenGLRenderer:
         if key in self.last_key_time and current_time - self.last_key_time[key] < 0.1:
             return
         self.last_key_time[key] = current_time
-        
+        move_distance = max(0.5, abs(self.camera_position[0]) * 0.01)
         if action == glfw.PRESS or action == glfw.REPEAT:
             # Application control
             if key == glfw.KEY_ESCAPE:
@@ -240,21 +240,21 @@ class OpenGLRenderer:
             elif key == glfw.KEY_W:
                 self.camera_position = (
                     self.camera_position[0],
-                    self.camera_position[1] + 0.5
+                    self.camera_position[1] + move_distance
                 )
             elif key == glfw.KEY_S:
                 self.camera_position = (
                     self.camera_position[0],
-                    self.camera_position[1] - 0.5
+                    self.camera_position[1] - move_distance
                 )
             elif key == glfw.KEY_A:
                 self.camera_position = (
-                    self.camera_position[0] - 0.5,
+                    self.camera_position[0] - move_distance,
                     self.camera_position[1]
                 )
             elif key == glfw.KEY_D:
                 self.camera_position = (
-                    self.camera_position[0] + 0.5,
+                    self.camera_position[0] + move_distance,
                     self.camera_position[1]
                 )
             
@@ -493,13 +493,16 @@ class OpenGLRenderer:
         # Apply auto-rotation if enabled
         self._update_camera_for_rotation()
         
+        # Debug log - monitor camera position changes
+        logger.debug(f"Camera position: {self.camera_position}")
+        
         # Run the simulation only if not paused
         if not self.paused or self.last_image is None:
             t_start = time.time()
             
-            # Run the simulation
+            # Run the simulation with the current camera position
             image = run_simulation(
-                custom_camera_position=self.camera_position,
+                custom_camera_position=self.camera_position,  # Ensure this is being used
                 custom_black_hole_mass=self.black_hole_mass,
                 custom_fov=self.fov,
                 b_field_exponent=self.b_field_exponent,
